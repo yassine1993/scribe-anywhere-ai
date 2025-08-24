@@ -80,6 +80,11 @@ The project includes a FastAPI backend that provides:
 - JWT authentication with optional Google OAuth stub
 - Stripe subscription endpoint ($10/month)
 - Priority transcription queue (paid users are processed first)
+- GPU-accelerated Whisper transcription with Cheetah (fast), Dolphin (balanced) and Whale (accurate) modes
+- Supports 98+ input languages and translation to 130+ target languages
+- Optional audio restoration and speaker recognition
+- Encrypted transcript storage
+- Upload/check/retrieve endpoints supporting TXT and JSON (demo) formats
 - Encrypted transcript storage
 - Upload/check/retrieve endpoints supporting TXT, JSON (demo) formats
 
@@ -87,6 +92,9 @@ The project includes a FastAPI backend that provides:
 
 ```sh
 pip install -r requirements.txt
+redis-server &
+npm run server  # starts FastAPI using uvicorn
+python backend/worker.py  # start background transcription worker
 npm run server  # starts FastAPI using uvicorn
 ```
 

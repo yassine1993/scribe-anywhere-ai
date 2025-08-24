@@ -30,6 +30,11 @@ class JobStatus(BaseModel):
     id: int
     status: str
     created_at: datetime
+    mode: str
+    language: Optional[str] = None
+    target_language: Optional[str] = None
+    restore_audio: bool
+    speaker_recognition: bool
 
     class Config:
         orm_mode = True

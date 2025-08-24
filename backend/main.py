@@ -1,10 +1,13 @@
 import os
+import json
+from typing import List, Optional
 import shutil
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from .database import Base, engine, get_db
 from . import models, schemas, auth, payments
+from .tasks import paid_q, free_q, transcribe_job
 from .queue import queue
 from .tasks import start_workers
 from .utils import decrypt
@@ -50,6 +53,35 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
 @app.post("/jobs/upload")
+async def upload_files(files: List[UploadFile] = File(...), mode: str = "dolphin",
+                       language: Optional[str] = None, target_language: Optional[str] = None,
+                       restore_audio: bool = False, speaker_recognition: bool = False,
+                       current_user: models.User = Depends(auth.get_current_user),
+                       db: Session = Depends(get_db)):
+    user = current_user
+    limit = 100 if user.is_paid else 10
+    if user.usage_count + len(files) > limit:
+        raise HTTPException(status_code=403, detail="Usage limit exceeded")
+    job_ids = []
+    for file in files:
+        contents = await file.read()
+        if len(contents) > 5 * 1024 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="File too large")
+        path = os.path.join(UPLOAD_DIR, file.filename)
+        with open(path, "wb") as f:
+            f.write(contents)
+        db_job = models.TranscriptionJob(user_id=user.id, filename=file.filename, mode=mode,
+                                         language=language, target_language=target_language,
+                                         restore_audio=restore_audio, speaker_recognition=speaker_recognition)
+        db.add(db_job)
+        db.commit()
+        db.refresh(db_job)
+        queue = paid_q if user.is_paid else free_q
+        queue.enqueue(transcribe_job, db_job.id, path, mode, language, target_language, restore_audio, speaker_recognition)
+        job_ids.append(db_job.id)
+        user.usage_count += 1
+        db.commit()
+    return {"job_ids": job_ids}
 async def upload_file(file: UploadFile = File(...), current_user: models.User = Depends(auth.get_current_user), db: Session = Depends(get_db)):
     contents = await file.read()
     if len(contents) > 5 * 1024 * 1024 * 1024:
@@ -88,6 +120,13 @@ async def get_transcript(job_id: int, format: str = "txt", current_user: models.
     job = db.query(models.TranscriptionJob).filter_by(id=job_id, user_id=current_user.id).first()
     if not job or job.status != "completed" or not job.transcript_encrypted:
         raise HTTPException(status_code=404, detail="Transcript not available")
+    data = decrypt(job.transcript_encrypted)
+    if format == "txt":
+        segments = json.loads(data)["segments"]
+        text = "\n".join(seg["text"] for seg in segments)
+        return {"text": text}
+    elif format == "json":
+        return json.loads(data)
     text = decrypt(job.transcript_encrypted)
     if format == "txt":
         return {"text": text}
