@@ -1,5 +1,6 @@
 import os
 from pydantic import BaseSettings
+from cryptography.fernet import Fernet
 
 
 class Settings(BaseSettings):
@@ -13,6 +14,7 @@ class Settings(BaseSettings):
     stripe_secret_key: str = os.getenv("STRIPE_SECRET_KEY", "sk_test_dummy")
     google_client_id: str = os.getenv("GOOGLE_CLIENT_ID", "")
     google_client_secret: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
+    fernet_key: str = os.getenv("FERNET_KEY", Fernet.generate_key().decode())
 
 
 settings = Settings()

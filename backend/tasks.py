@@ -1,4 +1,5 @@
 import json
+import os
 from typing import Optional
 from redis import Redis
 from rq import Queue
@@ -14,6 +15,7 @@ except Exception:  # pragma: no cover - optional dependency
 from .config import settings
 from .database import SessionLocal
 from .models import TranscriptionJob
+from .utils import encrypt, decrypt_bytes
 from .utils import encrypt
 
 redis_conn = Redis.from_url(settings.redis_url)
@@ -53,6 +55,12 @@ def transcribe_job(job_id: int, file_path: str, mode: str = "dolphin", language:
                    target_language: Optional[str] = None, restore: bool = False,
                    recognize_speakers: bool = False) -> None:
     model = get_model(mode)
+    tmp_path = file_path.replace(".enc", "")
+    with open(file_path, "rb") as f:
+        decrypted = decrypt_bytes(f.read())
+    with open(tmp_path, "wb") as f:
+        f.write(decrypted)
+    audio_path = restore_audio(tmp_path) if restore else tmp_path
     audio_path = restore_audio(file_path) if restore else file_path
     task = "translate" if target_language else "transcribe"
     segments, _ = model.transcribe(audio_path, language=language, task=task)
@@ -80,6 +88,15 @@ def transcribe_job(job_id: int, file_path: str, mode: str = "dolphin", language:
         job.transcript_encrypted = encrypt(transcript_json)
         db.commit()
     db.close()
+    if restore and audio_path != tmp_path:
+        try:
+            os.remove(audio_path)
+        except OSError:
+            pass
+    try:
+        os.remove(tmp_path)
+    except OSError:
+        pass
 import asyncio
 from .queue import queue
 from .utils import encrypt

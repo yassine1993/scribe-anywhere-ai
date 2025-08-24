@@ -1,5 +1,7 @@
 from datetime import datetime
 from typing import Optional, List
+from pydantic import BaseModel, EmailStr
+from enum import Enum
 from typing import Optional
 from pydantic import BaseModel, EmailStr
 
@@ -44,3 +46,9 @@ class JobStatus(BaseModel):
 class BulkExportRequest(BaseModel):
     job_ids: List[int]
     format: str
+
+
+class Mode(str, Enum):
+    cheetah = "cheetah"
+    dolphin = "dolphin"
+    whale = "whale"
