@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Optional, List
 from typing import Optional
 from pydantic import BaseModel, EmailStr
 
@@ -38,3 +39,8 @@ class JobStatus(BaseModel):
 
     class Config:
         orm_mode = True
+
+
+class BulkExportRequest(BaseModel):
+    job_ids: List[int]
+    format: str

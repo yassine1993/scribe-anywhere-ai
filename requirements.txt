@@ -16,3 +16,4 @@ rq
 googletrans==4.0.0rc1
 torch
 pyannote.audio
+pyannote.audio

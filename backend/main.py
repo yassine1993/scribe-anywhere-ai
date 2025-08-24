@@ -1,5 +1,10 @@
 import os
 import json
+from io import BytesIO
+from typing import List, Optional
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
+from fastapi.responses import StreamingResponse
+from zipfile import ZipFile
 from typing import List, Optional
 import shutil
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
@@ -8,6 +13,8 @@ from sqlalchemy.orm import Session
 from .database import Base, engine, get_db
 from . import models, schemas, auth, payments
 from .tasks import paid_q, free_q, transcribe_job
+from .utils import decrypt
+from .export_utils import export_segments
 from .queue import queue
 from .tasks import start_workers
 from .utils import decrypt
@@ -121,6 +128,37 @@ async def get_transcript(job_id: int, format: str = "txt", current_user: models.
     if not job or job.status != "completed" or not job.transcript_encrypted:
         raise HTTPException(status_code=404, detail="Transcript not available")
     data = decrypt(job.transcript_encrypted)
+    if format == "json":
+        return json.loads(data)
+    segments = json.loads(data)["segments"]
+    try:
+        buf, media, ext = export_segments(segments, format)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Format not supported")
+    filename = f"{job.filename}.{ext}"
+    headers = {"Content-Disposition": f"attachment; filename={filename}"}
+    return StreamingResponse(buf, media_type=media, headers=headers)
+
+
+@app.post("/jobs/export")
+async def bulk_export(req: schemas.BulkExportRequest, current_user: models.User = Depends(auth.get_current_user), db: Session = Depends(get_db)):
+    jobs = db.query(models.TranscriptionJob).filter(models.TranscriptionJob.id.in_(req.job_ids), models.TranscriptionJob.user_id == current_user.id, models.TranscriptionJob.status == "completed").all()
+    if not jobs:
+        raise HTTPException(status_code=404, detail="No transcripts found")
+    mem = BytesIO()
+    with ZipFile(mem, "w") as zf:
+        for job in jobs:
+            if not job.transcript_encrypted:
+                continue
+            segments = json.loads(decrypt(job.transcript_encrypted))["segments"]
+            try:
+                buf, _, ext = export_segments(segments, req.format)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Format not supported")
+            zf.writestr(f"{job.filename}.{ext}", buf.getvalue())
+    mem.seek(0)
+    headers = {"Content-Disposition": "attachment; filename=transcripts.zip"}
+    return StreamingResponse(mem, media_type="application/zip", headers=headers)
     if format == "txt":
         segments = json.loads(data)["segments"]
         text = "\n".join(seg["text"] for seg in segments)
