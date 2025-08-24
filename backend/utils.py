@@ -2,6 +2,8 @@ from cryptography.fernet import Fernet
 from .config import settings
 
 fernet = Fernet(settings.fernet_key.encode())
+_key = Fernet.generate_key()
+fernet = Fernet(_key)
 
 
 def encrypt(text: str) -> str:

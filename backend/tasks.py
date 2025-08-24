@@ -16,6 +16,7 @@ from .config import settings
 from .database import SessionLocal
 from .models import TranscriptionJob
 from .utils import encrypt, decrypt_bytes
+from .utils import encrypt
 
 redis_conn = Redis.from_url(settings.redis_url)
 paid_q = Queue("paid", connection=redis_conn)
@@ -60,6 +61,7 @@ def transcribe_job(job_id: int, file_path: str, mode: str = "dolphin", language:
     with open(tmp_path, "wb") as f:
         f.write(decrypted)
     audio_path = restore_audio(tmp_path) if restore else tmp_path
+    audio_path = restore_audio(file_path) if restore else file_path
     task = "translate" if target_language else "transcribe"
     segments, _ = model.transcribe(audio_path, language=language, task=task)
     diarization = diarization_pipeline(audio_path) if recognize_speakers and diarization_pipeline else None
@@ -95,3 +97,25 @@ def transcribe_job(job_id: int, file_path: str, mode: str = "dolphin", language:
         os.remove(tmp_path)
     except OSError:
         pass
+import asyncio
+from .queue import queue
+from .utils import encrypt
+
+
+async def transcribe_audio(file_path: str) -> str:
+    # Placeholder transcription logic
+    await asyncio.sleep(1)
+    return f"Transcription for {file_path}"
+
+
+async def worker():
+    while True:
+        job = await queue.get_job()
+        transcript = await transcribe_audio(job["file_path"])
+        encrypted = encrypt(transcript)
+        queue.update_job(job["id"], status="completed", transcript=encrypted)
+
+
+async def start_workers(n: int = 1):
+    for _ in range(n):
+        asyncio.create_task(worker())

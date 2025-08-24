@@ -89,6 +89,8 @@ The project includes a FastAPI backend that provides:
 - HTTPS enforcement with encrypted file & transcript storage
 - Secure owner-only access, GDPR-style deletion
 - Rate limiting, request validation and logging
+- Encrypted transcript storage
+- Upload/check/retrieve endpoints supporting TXT, JSON (demo) formats
 
 ### Running the backend
 
@@ -103,6 +105,8 @@ Set `FERNET_KEY` in your environment to persist encryption keys:
 
 ```sh
 export FERNET_KEY=$(python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
+
+npm run server  # starts FastAPI using uvicorn
 ```
 
 ### Running the frontend
