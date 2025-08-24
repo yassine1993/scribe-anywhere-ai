@@ -1,0 +1,107 @@
+version: '3.8'
+
+services:
+  # Redis for job queues
+  redis:
+    image: redis:7-alpine
+    container_name: transcribeai-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+
+  # PostgreSQL database
+  postgres:
+    image: postgres:15-alpine
+    container_name: transcribeai-postgres
+    environment:
+      POSTGRES_DB: transcribeai
+      POSTGRES_USER: transcribeai
+      POSTGRES_PASSWORD: transcribeai_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  # FastAPI backend
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: transcribeai-backend
+    environment:
+      - DATABASE_URL=postgresql://transcribeai:transcribeai_password@postgres:5432/transcribeai
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=${SECRET_KEY:-changeme}
+      - FERNET_KEY=${FERNET_KEY}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-sk_test_dummy}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-whsec_dummy}
+    ports:
+      - "8000:8000"
+    volumes:
+      - uploads_data:/app/uploads
+      - ./backend:/app/backend
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+    command: uvicorn backend.main:app --host 0.0.0.0 --port 8000
+
+  # Background worker
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: transcribeai-worker
+    environment:
+      - DATABASE_URL=postgresql://transcribeai:transcribeai_password@postgres:5432/transcribeai
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=${SECRET_KEY:-changeme}
+      - FERNET_KEY=${FERNET_KEY}
+    volumes:
+      - uploads_data:/app/uploads
+      - ./backend:/app/backend
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+    command: python backend/worker.py 2
+
+  # React frontend
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: transcribeai-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  # Nginx reverse proxy
+  nginx:
+    image: nginx:alpine
+    container_name: transcribeai-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - backend
+      - frontend
+    restart: unless-stopped
+
+volumes:
+  redis_data:
+  postgres_data:
+  uploads_data:
+
+networks:
+  default:
+    name: transcribeai-network
