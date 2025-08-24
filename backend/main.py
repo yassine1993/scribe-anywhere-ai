@@ -5,6 +5,9 @@ from typing import List, Optional
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse
 from zipfile import ZipFile
+from typing import List, Optional
+import shutil
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from .database import Base, engine, get_db
@@ -12,12 +15,18 @@ from . import models, schemas, auth, payments
 from .tasks import paid_q, free_q, transcribe_job
 from .utils import decrypt
 from .export_utils import export_segments
+from .queue import queue
+from .tasks import start_workers
+from .utils import decrypt
 
 Base.metadata.create_all(bind=engine)
 app = FastAPI(title="Scribe Anywhere API")
 app.include_router(payments.router)
 
 
+@app.on_event("startup")
+async def startup_event():
+    await start_workers(1)
 
 
 @app.post("/auth/register", response_model=schemas.UserOut)
@@ -80,6 +89,24 @@ async def upload_files(files: List[UploadFile] = File(...), mode: str = "dolphin
         user.usage_count += 1
         db.commit()
     return {"job_ids": job_ids}
+async def upload_file(file: UploadFile = File(...), current_user: models.User = Depends(auth.get_current_user), db: Session = Depends(get_db)):
+    contents = await file.read()
+    if len(contents) > 5 * 1024 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File too large")
+    user = current_user
+    limit = 100 if user.is_paid else 10
+    if user.usage_count >= limit:
+        raise HTTPException(status_code=403, detail="Usage limit exceeded")
+    path = os.path.join(UPLOAD_DIR, file.filename)
+    with open(path, "wb") as f:
+        f.write(contents)
+    priority = 1 if user.is_paid else 10
+    job_id = await queue.add_job(priority, {"user_id": user.id, "file_path": path, "filename": file.filename})
+    db_job = models.TranscriptionJob(id=job_id, user_id=user.id, filename=file.filename)
+    db.add(db_job)
+    user.usage_count += 1
+    db.commit()
+    return {"job_id": job_id}
 
 
 @app.get("/jobs/{job_id}", response_model=schemas.JobStatus)
@@ -87,6 +114,11 @@ async def get_status(job_id: int, current_user: models.User = Depends(auth.get_c
     job = db.query(models.TranscriptionJob).filter_by(id=job_id, user_id=current_user.id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+    status_info = queue.get_status(job_id)
+    job.status = status_info.get("status", job.status)
+    if status_info.get("transcript") and not job.transcript_encrypted:
+        job.transcript_encrypted = status_info["transcript"]
+        db.commit()
     return job
 
 
@@ -127,3 +159,16 @@ async def bulk_export(req: schemas.BulkExportRequest, current_user: models.User 
     mem.seek(0)
     headers = {"Content-Disposition": "attachment; filename=transcripts.zip"}
     return StreamingResponse(mem, media_type="application/zip", headers=headers)
+    if format == "txt":
+        segments = json.loads(data)["segments"]
+        text = "\n".join(seg["text"] for seg in segments)
+        return {"text": text}
+    elif format == "json":
+        return json.loads(data)
+    text = decrypt(job.transcript_encrypted)
+    if format == "txt":
+        return {"text": text}
+    elif format == "json":
+        return {"transcript": text}
+    else:
+        raise HTTPException(status_code=400, detail="Format not supported in demo")

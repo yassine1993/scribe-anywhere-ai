@@ -86,6 +86,8 @@ The project includes a FastAPI backend that provides:
 - Encrypted transcript storage
 - Upload/check/retrieve endpoints supporting TXT and JSON (demo) formats
 - Bulk transcript export to DOCX, PDF, TXT, CSV, SRT and VTT with timestamps and speaker labels
+- Encrypted transcript storage
+- Upload/check/retrieve endpoints supporting TXT, JSON (demo) formats
 
 ### Running the backend
 
@@ -94,6 +96,8 @@ pip install -r requirements.txt
 redis-server &
 npm run server  # starts FastAPI using uvicorn
 python backend/worker.py  # start background transcription worker
+
+npm run server  # starts FastAPI using uvicorn
 ```
 
 ### Running the frontend
