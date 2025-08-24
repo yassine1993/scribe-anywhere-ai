@@ -2,8 +2,6 @@ from datetime import datetime
 from typing import Optional, List
 from pydantic import BaseModel, EmailStr
 from enum import Enum
-from typing import Optional
-from pydantic import BaseModel, EmailStr
 
 
 class UserCreate(BaseModel):
@@ -15,6 +13,7 @@ class UserOut(BaseModel):
     id: int
     email: EmailStr
     is_paid: bool
+    usage_count: int
 
     class Config:
         orm_mode = True
@@ -38,6 +37,7 @@ class JobStatus(BaseModel):
     target_language: Optional[str] = None
     restore_audio: bool
     speaker_recognition: bool
+    filename: str
 
     class Config:
         orm_mode = True
@@ -52,3 +52,11 @@ class Mode(str, Enum):
     cheetah = "cheetah"
     dolphin = "dolphin"
     whale = "whale"
+
+
+class TranscriptionRequest(BaseModel):
+    mode: Mode = Mode.dolphin
+    language: Optional[str] = None
+    target_language: Optional[str] = None
+    restore_audio: bool = False
+    speaker_recognition: bool = False
