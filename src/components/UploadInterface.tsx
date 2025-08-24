@@ -75,6 +75,23 @@ const UploadInterface = () => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
+  const handleTranscription = async () => {
+    if (selectedFiles.length === 0) return;
+    const formData = new FormData();
+    selectedFiles.forEach((file) => formData.append('files', file));
+
+    try {
+      const response = await fetch('http://localhost:3001/api/transcribe', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await response.json();
+      console.log('Transcription response:', data);
+    } catch (error) {
+      console.error('Transcription failed', error);
+    }
+  };
+
   return (
     <section className="py-20 px-4">
       <div className="container mx-auto max-w-4xl">
@@ -219,7 +236,7 @@ const UploadInterface = () => {
               <Button variant="outline" onClick={() => setSelectedFiles([])}>
                 Clear Files
               </Button>
-              <Button variant="hero" size="lg" className="px-8">
+              <Button variant="hero" size="lg" className="px-8" onClick={handleTranscription}>
                 <Zap className="w-5 h-5 mr-2" />
                 Start Transcription ({selectedFiles.length} file{selectedFiles.length !== 1 ? 's' : ''})
               </Button>

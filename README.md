@@ -71,3 +71,43 @@ Yes, you can!
 To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
 
 Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+
+
+## Backend API
+
+The project includes a FastAPI backend that provides:
+
+- JWT authentication with optional Google OAuth stub
+- Stripe subscription endpoint ($10/month)
+- Priority transcription queue (paid users are processed first)
+- GPU-accelerated Whisper transcription with Cheetah (fast), Dolphin (balanced) and Whale (accurate) modes
+- Supports 98+ input languages and translation to 130+ target languages
+- Optional audio restoration and speaker recognition
+- Encrypted transcript storage
+- Upload/check/retrieve endpoints supporting TXT and JSON (demo) formats
+- Bulk transcript export to DOCX, PDF, TXT, CSV, SRT and VTT with timestamps and speaker labels
+- HTTPS enforcement with encrypted file & transcript storage
+- Secure owner-only access, GDPR-style deletion
+- Rate limiting, request validation and logging
+
+### Running the backend
+
+```sh
+pip install -r requirements.txt
+redis-server &
+npm run server  # starts FastAPI using uvicorn
+python backend/worker.py  # start background transcription worker
+```
+
+Set `FERNET_KEY` in your environment to persist encryption keys:
+
+```sh
+export FERNET_KEY=$(python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
+```
+
+### Running the frontend
+
+```sh
+npm install
+npm run dev
+```
