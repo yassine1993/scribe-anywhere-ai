@@ -71,3 +71,28 @@ Yes, you can!
 To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
 
 Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+
+
+## Backend API
+
+The project includes a FastAPI backend that provides:
+
+- JWT authentication with optional Google OAuth stub
+- Stripe subscription endpoint ($10/month)
+- Priority transcription queue (paid users are processed first)
+- Encrypted transcript storage
+- Upload/check/retrieve endpoints supporting TXT, JSON (demo) formats
+
+### Running the backend
+
+```sh
+pip install -r requirements.txt
+npm run server  # starts FastAPI using uvicorn
+```
+
+### Running the frontend
+
+```sh
+npm install
+npm run dev
+```
